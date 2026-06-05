@@ -13,13 +13,47 @@ React + Vite + TypeScript + Tailwind + framer-motion 实现的可交互原型,�
 
 ## 运行
 
-需要 Node 18+(含 npm)。本机若无,可从 https://nodejs.org 下载 macOS 版,或 `brew install node`。
+需要 Node 18+(含 npm)。本机若无,可从 https://nodejs.org 下载 LTS 安装包(自带 npm,别用会编译源码的老 brew)。
 
 ```bash
 npm install
 npm run dev
-# 打开 http://localhost:5173
+# 打开 http://localhost:5173 (已开 host:true,可用同一局域网的手机访问)
 ```
+
+## 换电脑 / 在新机器上接着开发
+
+仓库根目录就是原型本身(`package.json` 在根目录,没有嵌套子文件夹)。
+
+1. 先装好 **Cursor**、**Node.js LTS**、**Git**。
+2. 克隆并运行:
+
+```bash
+git clone https://github.com/szweee/healthy-app-prototype.git
+cd healthy-app-prototype
+npm install
+npm run dev
+```
+
+> `node_modules` 不在仓库里,必须 `npm install` 重新装一次,这是正常的。
+
+3. **在 Cursor 里恢复上下文**:聊天记录不随账号同步,新机器上看不到旧对话。打开本文件夹后,新建对话并让它先读 `PROGRESS.md`(交接文档)和 `docs/方案.md`(产品方案),即可无缝接上当前进度与已锁定的决策。
+
+## 日常多机同步
+
+```bash
+# 改完后
+git add -A && git commit -m "说明" && git push
+# 换到另一台前
+git pull
+```
+
+有大进展时顺手更新 `PROGRESS.md`,让交接文档始终最新。
+
+## 文档
+
+- `docs/方案.md` — 产品方案(已锁定的战略、边界、信息架构、goalProfile 等),唯一权威设计文档。
+- `PROGRESS.md` — 换机/换会话交接文档(项目现状、运行方式、已实现交互、下一步)。
 
 ## 调试参数(仅用于截图)
 
