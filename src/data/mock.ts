@@ -37,7 +37,8 @@ export const macros = {
 };
 
 // 真实食物照片(放在 public/foods/),用作缩略图背景
-const img = (f: string) => `url('/foods/${f}') center/cover no-repeat`;
+const img = (f: string) =>
+  `url('${import.meta.env.BASE_URL}foods/${f}') center/cover no-repeat`;
 export const foodPhotos = [
   img("food-oatmeal.png"),
   img("food-salad.png"),
