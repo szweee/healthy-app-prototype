@@ -90,32 +90,63 @@ export function IntakeTrend({
           const active = sel === i;
           return (
             <button
+              type="button"
               key={i}
               onClick={() => setSel(active ? null : i)}
-              className="group flex h-full flex-1 cursor-pointer flex-col justify-end"
+              className="group relative h-full min-w-0 flex-1 cursor-pointer appearance-none border-0 bg-transparent p-0"
+              style={{ opacity: sel === null || active ? 1 : 0.4 }}
               aria-label={`${selectedLabel(range, labels[i], i)} ${v} kcal`}
             >
               {showLabels && (
                 <span
-                  className={`mb-0.5 text-center text-[9px] font-medium ${
+                  className={`absolute left-0 right-0 top-0 z-20 text-center text-[9px] font-medium ${
                     active ? "text-ink-900" : "text-ink-400"
                   }`}
                 >
                   {v >= 1000 ? (v / 1000).toFixed(1) + "k" : v}
                 </span>
               )}
-              {orangePx > 0 && (
-                <div
-                  className={`rounded-t-[4px] bg-[#E7A23B] transition-opacity duration-200 ${active ? "ring-1 ring-[#B96F1A]" : ""}`}
-                  style={{ height: orangePx, opacity: sel === null || active ? 1 : 0.4 }}
+              <svg
+                className="absolute inset-x-0 bottom-0 h-full w-full overflow-visible"
+                viewBox={`0 0 24 ${TRACK}`}
+                preserveAspectRatio="none"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <BarSegment
+                  x={5}
+                  y={TRACK - greenPx}
+                  width={14}
+                  height={greenPx}
+                  radius={4}
+                  fill="#6FC5A0"
+                  topRounded={orangePx <= 0}
                 />
-              )}
-              <div
-                className={`transition-opacity duration-200 ${orangePx > 0 ? "bg-[#6FC5A0]" : "rounded-t-[4px] bg-[#6FC5A0]"} ${
-                  active ? "ring-1 ring-brand-700" : ""
-                }`}
-                style={{ height: greenPx, opacity: sel === null || active ? 1 : 0.4 }}
-              />
+                {orangePx > 0 && (
+                  <BarSegment
+                    x={5}
+                    y={TRACK - greenPx - orangePx}
+                    width={14}
+                    height={orangePx}
+                    radius={4}
+                    fill="#E7A23B"
+                    topRounded
+                  />
+                )}
+                {active && (
+                  <rect
+                    x="4.5"
+                    y={TRACK - greenPx - orangePx - 0.5}
+                    width="15"
+                    height={greenPx + orangePx + 1}
+                    rx="4.5"
+                    fill="none"
+                    stroke={orangePx > 0 ? "#B96F1A" : "#2F8568"}
+                    strokeWidth="1"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                )}
+              </svg>
             </button>
           );
         })}
@@ -193,6 +224,33 @@ export function IntakeTrend({
       )}
     </div>
   );
+}
+
+function BarSegment({
+  x,
+  y,
+  width,
+  height,
+  radius,
+  fill,
+  topRounded,
+}: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  radius: number;
+  fill: string;
+  topRounded: boolean;
+}) {
+  if (height <= 0) return null;
+  const r = topRounded ? Math.min(radius, height, width / 2) : 0;
+  const bottom = y + height;
+  const d = topRounded
+    ? `M ${x} ${bottom} L ${x} ${y + r} Q ${x} ${y} ${x + r} ${y} L ${x + width - r} ${y} Q ${x + width} ${y} ${x + width} ${y + r} L ${x + width} ${bottom} Z`
+    : `M ${x} ${y} H ${x + width} V ${bottom} H ${x} Z`;
+
+  return <path d={d} fill={fill} />;
 }
 
 function DetailStat({ label, value, unit }: { label: string; value: string; unit: string }) {
