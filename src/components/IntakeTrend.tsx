@@ -109,9 +109,9 @@ export function IntakeTrend({
               {orangePx > 0 && (
                 <motion.div
                   className={`rounded-t-[4px] bg-[#E7A23B] ${active ? "ring-1 ring-[#B96F1A]" : ""}`}
-                  style={{ opacity: sel === null || active ? 1 : 0.4 }}
+                  style={{ height: orangePx, opacity: sel === null || active ? 1 : 0.4 }}
                   initial={STATIC ? false : { height: 0 }}
-                  animate={{ height: orangePx }}
+                  animate={STATIC ? undefined : { height: orangePx }}
                   transition={{ duration: 0.5, delay: i * 0.012, ease: "easeOut" }}
                 />
               )}
@@ -119,9 +119,9 @@ export function IntakeTrend({
                 className={`${orangePx > 0 ? "bg-[#6FC5A0]" : "rounded-t-[4px] bg-[#6FC5A0]"} ${
                   active ? "ring-1 ring-brand-700" : ""
                 }`}
-                style={{ opacity: sel === null || active ? 1 : 0.4 }}
+                style={{ height: greenPx, opacity: sel === null || active ? 1 : 0.4 }}
                 initial={STATIC ? false : { height: 0 }}
-                animate={{ height: greenPx }}
+                animate={STATIC ? undefined : { height: greenPx }}
                 transition={{ duration: 0.5, delay: i * 0.012, ease: "easeOut" }}
               />
             </button>
