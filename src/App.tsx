@@ -33,8 +33,8 @@ export default function App() {
   };
 
   return (
-    <div className="flex min-h-full flex-col items-center gap-6 py-10 max-[430px]:block max-[430px]:p-0">
-      <header className="text-center max-[430px]:hidden">
+    <div className="flex min-h-full flex-col items-center gap-6 py-10">
+      <header className="text-center">
         <h1 className="text-[15px] font-semibold text-ink-700">饮食运动打卡 · 高保真原型</h1>
         <p className="mt-0.5 text-[12px] text-ink-400">点底部 + 试快速记录:可拖动、上滑展开、下滑关闭</p>
       </header>
@@ -124,7 +124,7 @@ export default function App() {
         </div>
       </PhoneFrame>
 
-      <p className="max-w-[420px] text-center text-[11px] leading-relaxed text-ink-400 max-[430px]:hidden">
+      <p className="max-w-[420px] text-center text-[11px] leading-relaxed text-ink-400">
         原型用 mock 数据,仅演示信息架构与核心交互。配色/动效/文案可继续迭代。
       </p>
     </div>
