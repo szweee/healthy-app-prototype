@@ -8,15 +8,15 @@ const items = [
   { key: "脂肪", data: macros.fat, color: "#C99BD1" },
 ];
 
-export function MacroBars() {
+export function MacroBars({ compact = false }: { compact?: boolean }) {
   return (
-    <div className="grid grid-cols-3 gap-3">
+    <div className={`grid grid-cols-3 ${compact ? "gap-2" : "gap-3"}`}>
       {items.map((it) => {
         const pct = Math.min(it.data.value / it.data.target, 1);
         return (
           <div key={it.key} className="flex flex-col items-center">
-            <span className="text-[12px] text-ink-500">{it.key}</span>
-            <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-pill bg-black/5">
+            <span className={`${compact ? "text-[11px]" : "text-[12px]"} text-ink-500`}>{it.key}</span>
+            <div className={`${compact ? "mt-1 h-1" : "mt-1.5 h-1.5"} w-full overflow-hidden rounded-pill bg-black/5`}>
               <motion.div
                 className="h-full rounded-pill"
                 style={{ background: it.color }}
@@ -25,7 +25,7 @@ export function MacroBars() {
                 transition={{ duration: 0.9, ease: "easeOut" }}
               />
             </div>
-            <span className="mt-1 text-[12px] font-medium text-ink-900">
+            <span className={`${compact ? "mt-0.5 text-[11px]" : "mt-1 text-[12px]"} font-medium text-ink-900`}>
               {it.data.value}
               <span className="text-ink-400">/{it.data.target}g</span>
             </span>

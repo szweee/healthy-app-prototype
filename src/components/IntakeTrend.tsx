@@ -5,7 +5,15 @@ import { STATIC } from "../anim";
 
 const TRACK = 128; // 柱区像素高度
 
-export function IntakeTrend({ range, offset = 0 }: { range: RangeKey; offset?: number }) {
+export function IntakeTrend({
+  range,
+  offset = 0,
+  onOpenRecord,
+}: {
+  range: RangeKey;
+  offset?: number;
+  onOpenRecord?: (title: string, subtitle?: string, empty?: boolean, scope?: "day" | "month") => void;
+}) {
   const src = intakeByRange[range];
   const labels = src.labels;
   const target = src.target;
@@ -21,10 +29,12 @@ export function IntakeTrend({ range, offset = 0 }: { range: RangeKey; offset?: n
     sel !== null
       ? {
           v: values[sel],
-          label: labels[sel] || `第 ${sel + 1} ${range === "年" ? "月" : "天"}`,
+          label: selectedLabel(range, labels[sel], sel),
           diff: values[sel] - target,
+          detail: buildDeviationDetail(values[sel], target, sel, range, offset),
         }
       : null;
+  const overDays = values.filter((v) => v > target).length;
 
   return (
     <div>
@@ -37,9 +47,7 @@ export function IntakeTrend({ range, offset = 0 }: { range: RangeKey; offset?: n
                 <span className="ml-1 text-[14px] font-medium text-ink-400">kcal</span>
               </div>
               <div className="mt-1 text-[12px]">
-                <span className="text-ink-400">
-                  {range === "年" ? `${selInfo.label} 月` : selInfo.label}
-                </span>
+                <span className="text-ink-400">{selInfo.label}</span>
                 <span className={selInfo.diff > 0 ? "ml-2 text-[#C77A1E]" : "ml-2 text-brand-600"}>
                   {selInfo.diff > 0 ? `超目标 +${selInfo.diff}` : `距目标 ${selInfo.diff}`}
                 </span>
@@ -52,7 +60,8 @@ export function IntakeTrend({ range, offset = 0 }: { range: RangeKey; offset?: n
                 <span className="ml-1 text-[14px] font-medium text-ink-400">kcal/天</span>
               </div>
               <div className="mt-1 text-[12px] text-ink-400">
-                {range === "周" ? "本周" : range === "月" ? "本月" : "今年"}平均摄入 · 点柱看当天
+                {range === "周" ? "本周" : range === "月" ? "本月" : "今年"}平均摄入 ·
+                {range === "年" ? " 点月份看摘要" : " 点柱看当天"}
               </div>
             </>
           )}
@@ -82,10 +91,11 @@ export function IntakeTrend({ range, offset = 0 }: { range: RangeKey; offset?: n
           const orangePx = (Math.max(0, v - target) / max) * TRACK;
           const active = sel === i;
           return (
-            <div
+            <button
               key={i}
               onClick={() => setSel(active ? null : i)}
-              className="flex h-full flex-1 cursor-pointer flex-col justify-end"
+              className="group flex h-full flex-1 cursor-pointer flex-col justify-end"
+              aria-label={`${selectedLabel(range, labels[i], i)} ${v} kcal`}
             >
               {showLabels && (
                 <span
@@ -98,7 +108,7 @@ export function IntakeTrend({ range, offset = 0 }: { range: RangeKey; offset?: n
               )}
               {orangePx > 0 && (
                 <motion.div
-                  className="rounded-t-[4px] bg-[#E7A23B]"
+                  className={`rounded-t-[4px] bg-[#E7A23B] ${active ? "ring-1 ring-[#B96F1A]" : ""}`}
                   style={{ opacity: sel === null || active ? 1 : 0.4 }}
                   initial={STATIC ? false : { height: 0 }}
                   animate={{ height: orangePx }}
@@ -106,13 +116,15 @@ export function IntakeTrend({ range, offset = 0 }: { range: RangeKey; offset?: n
                 />
               )}
               <motion.div
-                className={orangePx > 0 ? "bg-[#6FC5A0]" : "rounded-t-[4px] bg-[#6FC5A0]"}
+                className={`${orangePx > 0 ? "bg-[#6FC5A0]" : "rounded-t-[4px] bg-[#6FC5A0]"} ${
+                  active ? "ring-1 ring-brand-700" : ""
+                }`}
                 style={{ opacity: sel === null || active ? 1 : 0.4 }}
                 initial={STATIC ? false : { height: 0 }}
                 animate={{ height: greenPx }}
                 transition={{ duration: 0.5, delay: i * 0.012, ease: "easeOut" }}
               />
-            </div>
+            </button>
           );
         })}
       </div>
@@ -126,33 +138,172 @@ export function IntakeTrend({ range, offset = 0 }: { range: RangeKey; offset?: n
       </div>
       {selInfo ? (
         <div className="mt-3 rounded-2xl bg-canvas px-3 py-2.5">
-          <p className="mb-2 text-[12px] font-semibold text-ink-700">当天餐次明细</p>
-          <div className="grid grid-cols-4 gap-2">
-            {mealSplit(selInfo.v).map((m) => (
-              <div key={m.name} className="text-center">
-                <div className="text-[18px]">{m.emoji}</div>
-                <div className="text-[13px] font-bold text-ink-900">{m.kcal}</div>
-                <div className="text-[10px] text-ink-400">{m.name}</div>
-              </div>
-            ))}
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="text-[12px] font-semibold text-ink-700">
+              {range === "年" ? "月度偏差解释" : "当天偏差解释"}
+            </p>
+            <button
+              onClick={() =>
+                onOpenRecord?.(
+                  range === "年" ? `${selInfo.label}记录` : `${selInfo.label}记录`,
+                  range === "年"
+                    ? `月均 ${selInfo.v.toLocaleString()} kcal/天`
+                    : `${selInfo.v.toLocaleString()} kcal · ${selInfo.diff > 0 ? `超目标 ${selInfo.diff}` : `低于目标 ${Math.abs(selInfo.diff)}`}`,
+                  false,
+                  range === "年" ? "month" : "day"
+                )
+              }
+              className="shrink-0 text-[12px] font-medium text-brand-600"
+            >
+              {range === "年" ? "查看月度记录" : "查看当天记录"} ›
+            </button>
           </div>
+          <p className={`mb-2 text-[12px] font-medium leading-relaxed ${selInfo.detail.color}`}>
+            {selInfo.detail.message}
+          </p>
+          {range === "年" ? (
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <DetailStat label="月均摄入" value={selInfo.v.toLocaleString()} unit="kcal/天" />
+              <DetailStat
+                label={selInfo.diff > 0 ? "高于目标" : "低于目标"}
+                value={selInfo.diff > 0 ? `+${selInfo.diff}` : `${selInfo.diff}`}
+                unit="kcal/天"
+              />
+              <DetailStat label="记录天数" value={String(monthLoggedDays(sel ?? 0, offset))} unit="天" />
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {selInfo.detail.meals.map((m) => (
+                <div key={m.name} className="flex items-start justify-between gap-2 text-[12px]">
+                  <div className="min-w-0">
+                    <span className="font-semibold text-ink-800">{m.name}</span>
+                    <span className="ml-1 text-ink-500">{m.kcal} kcal · {m.foods}</span>
+                  </div>
+                  {m.flag && (
+                    <span className="shrink-0 rounded-pill bg-status-warn/15 px-2 py-0.5 text-[10px] font-medium text-[#9A681A]">
+                      {m.flag}
+                    </span>
+                  )}
+                </div>
+              ))}
+              <p className="pt-1 text-[10px] leading-relaxed text-ink-400">
+                原型用 mock 餐次演示;真实开发应从当天 MealLog 聚合。
+              </p>
+            </div>
+          )}
         </div>
       ) : (
         <p className="mt-2 text-[11px] leading-relaxed text-ink-400">
-          每根柱子是当天总摄入,探出虚线变橙的部分即超过当天目标的量。
+          {range === "年"
+            ? `每根柱子是月均摄入,今年有 ${overDays} 个月高于目标线。`
+            : `每根柱子是当天总摄入,本期有 ${overDays} 天高于目标线。`}
         </p>
       )}
     </div>
   );
 }
 
-// 把当天总摄入按典型比例拆到四餐(原型示意)
-function mealSplit(total: number) {
-  const parts = [
-    { name: "早餐", emoji: "🌅", r: 0.26 },
-    { name: "午餐", emoji: "🌤", r: 0.36 },
-    { name: "晚餐", emoji: "🌙", r: 0.28 },
-    { name: "加餐", emoji: "🍎", r: 0.1 },
+function DetailStat({ label, value, unit }: { label: string; value: string; unit: string }) {
+  return (
+    <div>
+      <p className="text-[10px] text-ink-400">{label}</p>
+      <p className="mt-0.5 text-[13px] font-bold text-ink-900">{value}</p>
+      <p className="text-[10px] text-ink-400">{unit}</p>
+    </div>
+  );
+}
+
+function selectedLabel(range: RangeKey, label: string | undefined, index: number) {
+  if (range === "年") return `${label || index + 1} 月`;
+  if (range === "周") return `周${label || index + 1}`;
+  return `${index + 1} 日`;
+}
+
+function monthLoggedDays(index: number, offset: number) {
+  const seed = Math.abs(offset) + index * 3;
+  return Math.max(22, Math.min(31, 26 + ((seed * 7) % 6) - (index % 3)));
+}
+
+type MealExplanation = {
+  name: string;
+  kcal: number;
+  foods: string;
+  flag?: string;
+};
+
+function buildDeviationDetail(
+  total: number,
+  target: number,
+  index: number,
+  range: RangeKey,
+  offset: number
+) {
+  const diff = total - target;
+  const over = diff > 0;
+  const meals = buildMockMeals(total, index, offset);
+  const highMeals = meals.filter((m) => m.flag === "偏高").map((m) => m.name);
+  const mainCause = highMeals.length > 0 ? highMeals.join("或") : "整体份量";
+
+  if (range === "年") {
+    return {
+      color: over ? "text-[#9A681A]" : "text-brand-700",
+      meals: [] as MealExplanation[],
+      message: over
+        ? `高于目标 ${diff} kcal/天,主要来自${mainCause}偏高的月份。下次可先看晚餐和加餐结构。`
+        : `低于目标 ${Math.abs(diff)} kcal/天,这个月整体控制较稳。继续看蛋白质和记录完整度。`,
+    };
+  }
+
+  return {
+    color: over ? "text-[#9A681A]" : "text-brand-700",
+    meals,
+    message: over
+      ? `高于目标 ${diff} kcal,主要来自${mainCause}。下次可先调整这两餐。`
+      : `低于目标 ${Math.abs(diff)} kcal,这天整体控制较稳。`,
+  };
+}
+
+function buildMockMeals(total: number, index: number, offset: number): MealExplanation[] {
+  const seed = Math.abs(offset) + index;
+  const templates = [
+    {
+      breakfast: "燕麦牛奶、咖啡",
+      lunch: "沙拉碗、全麦面包",
+      dinner: "炒菜 + 主食",
+      snack: "甜饮/点心",
+    },
+    {
+      breakfast: "鸡蛋、酸奶",
+      lunch: "鸡胸肉饭、蔬菜",
+      dinner: "番茄炒蛋、米饭",
+      snack: "拿铁、司康",
+    },
+    {
+      breakfast: "贝果、黑咖啡",
+      lunch: "三文鱼碗、牛油果",
+      dinner: "外卖盖饭",
+      snack: "水果、坚果",
+    },
   ];
-  return parts.map((p) => ({ ...p, kcal: Math.round(total * p.r) }));
+  const t = templates[seed % templates.length];
+  const over = total > 1800;
+  const snackHigh = over && seed % 2 === 0;
+  let breakfast = (over ? 320 : 270) + ((seed * 23) % 55);
+  let lunch = (over ? 540 : 430) + ((seed * 31) % 70);
+  let snack = snackHigh ? 300 + ((seed * 17) % 70) : (over ? 170 : 70) + ((seed * 19) % 70);
+  let dinner = total - breakfast - lunch - snack;
+
+  if (dinner < 360) {
+    const gap = 360 - dinner;
+    lunch = Math.max(360, lunch - Math.ceil(gap * 0.55));
+    snack = Math.max(50, snack - Math.floor(gap * 0.45));
+    dinner = total - breakfast - lunch - snack;
+  }
+
+  return [
+    { name: "早餐", kcal: breakfast, foods: t.breakfast },
+    { name: "午餐", kcal: lunch, foods: t.lunch },
+    { name: "晚餐", kcal: dinner, foods: t.dinner, flag: dinner >= 700 ? "偏高" : undefined },
+    { name: "加餐", kcal: snack, foods: t.snack, flag: snackHigh ? "偏高" : undefined },
+  ];
 }

@@ -22,18 +22,74 @@ export type FoodEntry = {
 
 export const todayBudget = {
   target: 1800,
-  consumed: 1190,
+  maintainMin: 1950,
+  maintainMax: 2250,
+  gainTarget: 2400,
+  bmr: 1420,
+  tdee: 2200,
+  deficit: 400,
+  surplus: 200,
+  consumed: 1590,
   burnedActive: 320, // HealthKit 活动消耗
   steps: 6840,
   stepGoal: 8000, // 软目标,可在"我的"里改/关
 };
 
+export type GoalKey = "deficit" | "maintain" | "gain";
+
+export const activeGoal: GoalKey = "deficit";
+
+export const goalProfiles: Record<
+  GoalKey,
+  {
+    label: string;
+    badge: string;
+    ringMode: "deficit" | "band" | "goal-fill";
+    target: number;
+    min?: number;
+    max?: number;
+    heroNote: string;
+    activityNote: string;
+    formula: string;
+  }
+> = {
+  deficit: {
+    label: "减重",
+    badge: "减重中 · 每周 -0.5kg",
+    ringMode: "deficit",
+    target: todayBudget.target,
+    heroNote: "预算已包含目标热量缺口,运动消耗不默认吃回。",
+    activityNote: "活动单独记录,不自动增加可吃额度",
+    formula: "减重预算 = 日常总消耗 - 目标热量缺口",
+  },
+  maintain: {
+    label: "维持",
+    badge: "维持中 · 看一周平均",
+    ringMode: "band",
+    target: Math.round((todayBudget.maintainMin + todayBudget.maintainMax) / 2),
+    min: todayBudget.maintainMin,
+    max: todayBudget.maintainMax,
+    heroNote: "维持不追求每天精确命中,重点看摄入是否落在合理区间。",
+    activityNote: "结合本周平均看,不用每天精确抵扣",
+    formula: "维持目标 = 日常总消耗的合理区间",
+  },
+  gain: {
+    label: "增肌",
+    badge: "增肌中 · 每周 +0.25kg",
+    ringMode: "goal-fill",
+    target: todayBudget.gainTarget,
+    heroNote: "目标是吃够能量和蛋白质,训练日可适当补碳水。",
+    activityNote: "训练日消耗较高时,优先补蛋白质和碳水",
+    formula: "增肌预算 = 日常总消耗 + 目标热量盈余",
+  },
+};
+
 export type RangeKey = "周" | "月" | "年";
 
 export const macros = {
-  carb: { value: 142, target: 200, color: "carb" as const },
-  protein: { value: 68, target: 110, color: "protein" as const },
-  fat: { value: 41, target: 60, color: "fat" as const },
+  carb: { value: 188, target: 200, color: "carb" as const },
+  protein: { value: 87, target: 110, color: "protein" as const },
+  fat: { value: 56, target: 60, color: "fat" as const },
 };
 
 // 真实食物照片(放在 public/foods/),用作缩略图背景
@@ -128,6 +184,33 @@ export const todayEntries: FoodEntry[] = [
     source: "AI",
     confidence: "low",
     flags: ["碳水较高"],
+  },
+  {
+    id: "e6",
+    name: "番茄炒蛋",
+    emoji: "🍅",
+    meal: "晚餐",
+    kcal: 230,
+    carb: 12,
+    protein: 14,
+    fat: 14,
+    time: "18:36",
+    photo: photoGradients[5],
+    source: "AI",
+    confidence: "mid",
+  },
+  {
+    id: "e7",
+    name: "米饭半碗",
+    emoji: "🍚",
+    meal: "晚餐",
+    kcal: 170,
+    carb: 36,
+    protein: 4,
+    fat: 1,
+    time: "18:38",
+    source: "库",
+    confidence: "high",
   },
 ];
 
@@ -266,11 +349,14 @@ export function daySummary(offset: number) {
   d.setDate(base.getDate() + offset);
   const isToday = offset === 0;
   const seed = Math.abs(offset);
-  const consumed = isToday ? todayBudget.consumed : 1300 + ((seed * 233) % 800);
+  const prototypeTodayEntries = todayEntries.filter((entry) => entry.meal === "早餐");
+  const consumed = isToday
+    ? prototypeTodayEntries.reduce((sum, entry) => sum + entry.kcal, 0)
+    : 1300 + ((seed * 233) % 800);
   const burnedActive = isToday ? todayBudget.burnedActive : 180 + ((seed * 91) % 360);
   const steps = isToday ? todayBudget.steps : 3200 + ((seed * 617) % 7000);
-  const count = isToday ? todayEntries.length : 2 + (seed % 4);
-  const entries = isToday ? todayEntries : todayEntries.slice(0, Math.min(count, todayEntries.length));
+  const count = isToday ? prototypeTodayEntries.length : 2 + (seed % 4);
+  const entries = isToday ? prototypeTodayEntries : todayEntries.slice(0, Math.min(count, todayEntries.length));
   return {
     offset,
     isToday,

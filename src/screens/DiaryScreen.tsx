@@ -1,44 +1,196 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
 import { Card } from "../components/Card";
 import { diaryMonth, todayEntries } from "../data/mock";
 
-type DayData = { day: number; photos: string[]; kcal: number };
-type Rect = { x: number; y: number; w: number; h: number };
-type Selected = { data: DayData; origin: Rect };
+export type RecordTarget = {
+  title: string;
+  subtitle?: string;
+  empty?: boolean;
+  scope?: "day" | "month";
+};
 
-export function DiaryScreen() {
-  const [view, setView] = useState<"calendar" | "list">("calendar");
-  const [selected, setSelected] = useState<Selected | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+export function DiaryScreen({
+  target,
+  onBack,
+}: {
+  target: RecordTarget;
+  onBack: () => void;
+}) {
+  const isMonth = target.scope === "month";
+  const [offset, setOffset] = useState(0);
+  const [dir, setDir] = useState(1);
+  const empty = Boolean(target.empty && offset === 0);
+  const entries = empty ? [] : entriesForOffset(offset);
+  const photoEntries = entries.filter((entry) => entry.photo);
+  const [view, setView] = useState<"list" | "photos">("list");
+  const total = entries.reduce((sum, entry) => sum + entry.kcal, 0);
+  const heading = isMonth ? monthLabel(offset) : dayLabel(offset, target.title);
+  const subtitle = target.subtitle ?? (empty ? "这天没有饮食记录" : `${entries.length} 项记录 · ${total} kcal`);
 
-  const select = (data: DayData, e: React.MouseEvent) => {
-    const cont = containerRef.current?.getBoundingClientRect();
-    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    if (!cont) return;
-    setSelected({
-      data,
-      origin: { x: r.left - cont.left, y: r.top - cont.top, w: r.width, h: r.height },
-    });
+  const older = () => {
+    setDir(1);
+    setOffset((value) => value - 1);
+  };
+  const newer = () => {
+    if (offset === 0) return;
+    setDir(-1);
+    setOffset((value) => Math.min(0, value + 1));
+  };
+  const reset = () => {
+    setDir(-1);
+    setOffset(0);
+  };
+  const onDragEnd = (_: unknown, info: PanInfo) => {
+    if (info.offset.x > 60) older();
+    else if (info.offset.x < -60) newer();
   };
 
   return (
-    <div
-      ref={containerRef}
-      className="no-scrollbar relative h-full overflow-y-auto px-4 pb-32 pt-14"
+    <motion.div
+      className="no-scrollbar h-full overflow-y-auto px-4 pb-8 pt-14"
+      initial={{ opacity: 0, x: 18 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 18 }}
+      transition={{ duration: 0.2, ease: "easeOut" }}
     >
-      <div className="mb-3 mt-1 flex items-center justify-between">
-        <h1 className="text-[22px] font-bold text-ink-900">日记</h1>
-        <div className="flex rounded-pill bg-black/5 p-0.5">
-          <ViewTab label="相册" active={view === "calendar"} onClick={() => setView("calendar")} />
-          <ViewTab label="列表" active={view === "list"} onClick={() => setView("list")} />
+      <div className="mb-3 mt-1 flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <button
+            onClick={onBack}
+            className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface text-[22px] text-ink-500 shadow-card active:scale-95"
+            aria-label="返回"
+          >
+            ‹
+          </button>
+          <div className="min-w-0">
+            <h1 className="truncate text-[22px] font-bold text-ink-900">{heading}</h1>
+            <div className="mt-0.5 flex items-center gap-2">
+              <p className="truncate text-[12px] text-ink-400">{subtitle}</p>
+              {offset !== 0 && (
+                <button onClick={reset} className="shrink-0 text-[11px] font-semibold text-brand-600">
+                  {isMonth ? "回到本月" : "回到今天"}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
+        <button className="shrink-0 rounded-pill bg-brand-50 px-3 py-1.5 text-[12px] font-semibold text-brand-700">
+          {empty ? "补记" : "添加"}
+        </button>
       </div>
 
-      {view === "calendar" ? <CalendarView onSelect={select} /> : <ListView />}
+      {!empty && (
+        <div className="mb-3 flex items-center justify-between">
+          {isMonth ? (
+            <div className="flex rounded-pill bg-black/5 p-0.5">
+              <ViewTab label="列表" active={view === "list"} onClick={() => setView("list")} />
+              <ViewTab label="照片" active={view === "photos"} onClick={() => setView("photos")} />
+            </div>
+          ) : (
+            <p className="text-[11px] text-ink-400">当天记录详情</p>
+          )}
+          {!isMonth && photoEntries.length > 0 && (
+            <button
+              onClick={() => setView(view === "photos" ? "list" : "photos")}
+              className={`rounded-pill px-3 py-1.5 text-[12px] font-semibold ${
+                view === "photos" ? "bg-brand-500 text-white" : "bg-surface text-brand-700 shadow-card"
+              }`}
+            >
+              照片 {photoEntries.length} ›
+            </button>
+          )}
+        </div>
+      )}
 
-      <DayDetail selected={selected} onClose={() => setSelected(null)} />
-    </div>
+      <motion.div drag="x" dragConstraints={{ left: 0, right: 0 }} dragElastic={0.16} onDragEnd={onDragEnd}>
+        <AnimatePresence mode="wait" custom={dir} initial={false}>
+          <motion.div
+            key={`${isMonth ? "month" : "day"}-${offset}-${view}`}
+            custom={dir}
+            initial={{ x: dir > 0 ? -24 : 24, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: dir > 0 ? 24 : -24, opacity: 0 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+          >
+            {empty ? (
+              <EmptyRecord />
+            ) : view === "photos" ? (
+              isMonth ? <MonthPhotoWall offset={offset} /> : <DayPhotoWall entries={photoEntries} onBack={() => setView("list")} />
+            ) : (
+              <RecordList entries={entries} total={total} />
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function EmptyRecord() {
+  return (
+    <Card className="px-4 py-5 text-center">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-[22px]">
+        +
+      </div>
+      <p className="mt-3 text-[15px] font-bold text-ink-900">这天还没有记录</p>
+      <p className="mx-auto mt-1 max-w-[240px] text-[12px] leading-relaxed text-ink-500">
+        补上当天吃了什么,趋势页才能判断是摄入变化,还是记录缺口。
+      </p>
+      <button className="mt-4 rounded-2xl bg-brand-500 px-5 py-2.5 text-[13px] font-semibold text-white shadow-card">
+        补记当天记录
+      </button>
+    </Card>
+  );
+}
+
+function RecordList({ entries, total }: { entries: typeof todayEntries; total: number }) {
+  return (
+    <>
+      <Card className="px-4 py-3">
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <SummaryStat label="总摄入" value={String(total)} unit="kcal" />
+          <SummaryStat label="已记录" value={String(mealCount(entries))} unit="餐" />
+          <SummaryStat label="蛋白质" value="达标" unit="估算" />
+        </div>
+      </Card>
+
+      <div className="mt-3 overflow-hidden rounded-[18px] bg-surface shadow-card">
+        {entries.map((entry, index) => (
+          <button
+            key={entry.id}
+            className={`flex w-full items-center gap-3 px-3.5 py-3 text-left active:bg-black/[0.03] ${
+              index > 0 ? "border-t border-black/5" : ""
+            }`}
+          >
+            <div
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] text-[20px]"
+              style={entry.photo ? { background: entry.photo } : { background: "#F1F0EB" }}
+            >
+              {!entry.photo && entry.emoji}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[14px] font-semibold text-ink-900">{entry.name}</p>
+              <p className="mt-0.5 truncate text-[11px] text-ink-400">
+                {entry.meal} · {entry.time} · 来源 {entry.source}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-[14px] font-bold text-ink-900">{entry.kcal}</p>
+              <p className="text-[10px] text-ink-400">kcal</p>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      <button className="mt-3 flex w-full items-center justify-between rounded-[16px] bg-brand-50 px-3.5 py-3 text-left active:scale-[0.99]">
+        <div>
+          <p className="text-[13px] font-semibold text-brand-800">少记了一餐?</p>
+          <p className="mt-0.5 text-[11px] text-brand-700/75">补一条记录,本期趋势会更准</p>
+        </div>
+        <span className="text-[12px] font-semibold text-brand-700">补记 ›</span>
+      </button>
+    </>
   );
 }
 
@@ -46,7 +198,7 @@ function ViewTab({ label, active, onClick }: { label: string; active: boolean; o
   return (
     <button
       onClick={onClick}
-      className={`rounded-pill px-3.5 py-1 text-[13px] ${
+      className={`rounded-pill px-3.5 py-1 text-[12px] ${
         active ? "bg-surface font-semibold text-ink-900 shadow-card" : "text-ink-500"
       }`}
     >
@@ -55,298 +207,143 @@ function ViewTab({ label, active, onClick }: { label: string; active: boolean; o
   );
 }
 
-function CalendarView({ onSelect }: { onSelect: (d: DayData, e: React.MouseEvent) => void }) {
-  const [monthOff, setMonthOff] = useState(0); // 0=本月,负=往前
-  let m = 6 + monthOff;
-  let y = 2026;
-  while (m < 1) {
-    m += 12;
-    y -= 1;
-  }
-  return (
-    <>
-      {/* 月份切换 */}
-      <div className="mb-3 flex items-center justify-between">
-        <button
-          onClick={() => setMonthOff((o) => o - 1)}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-ink-500 active:bg-black/5"
-          aria-label="上个月"
-        >
-          ‹
-        </button>
-        <button onClick={() => setMonthOff(0)} className="text-[16px] font-bold text-ink-900">
-          {y} 年 {m} 月
-          {monthOff !== 0 && <span className="ml-1.5 text-[11px] font-normal text-brand-600">回到本月</span>}
-        </button>
-        <button
-          onClick={() => setMonthOff((o) => Math.min(0, o + 1))}
-          disabled={monthOff === 0}
-          className={`flex h-8 w-8 items-center justify-center rounded-full active:bg-black/5 ${
-            monthOff === 0 ? "text-ink-200" : "text-ink-500"
-          }`}
-          aria-label="下个月"
-        >
-          ›
-        </button>
-      </div>
-
-      <div className="mb-1.5 grid grid-cols-7 gap-1.5 px-0.5 text-center text-[11px] text-ink-400">
-        {["一", "二", "三", "四", "五", "六", "日"].map((d) => (
-          <span key={d}>{d}</span>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 gap-1.5">
-        {diaryMonth.map((cell, i) => (
-          <DayCell
-            key={i}
-            day={cell.day}
-            photos={cell.photos}
-            onClick={
-              cell.day !== null && cell.photos.length > 0
-                ? (e) =>
-                    onSelect(
-                      { day: cell.day as number, photos: cell.photos, kcal: cell.kcal ?? 0 },
-                      e
-                    )
-                : undefined
-            }
-          />
-        ))}
-      </div>
-      <p className="mt-4 text-center text-[11px] text-ink-400">点某天查看与编辑当天记录</p>
-    </>
-  );
-}
-
-// 月网格:每格 = 日期 + 一张整齐缩略图(代表图),多条用右下角 +N
-// (扑克牌叠卡效果留给点开某天后的放大视图)
-function DayCell({
-  day,
-  photos,
-  onClick,
+function DayPhotoWall({
+  entries,
+  onBack,
 }: {
-  day: number | null;
-  photos: string[];
-  onClick?: (e: React.MouseEvent) => void;
+  entries: typeof todayEntries;
+  onBack: () => void;
 }) {
-  if (day === null) return <div className="aspect-[4/5]" />;
-  const extra = photos.length - 1;
   return (
-    <div className="relative aspect-[4/5]" onClick={onClick}>
-      {photos.length === 0 ? (
-        <div className="flex h-full w-full items-center justify-center rounded-xl bg-black/[0.04] text-[12px] text-ink-400">
-          {day}
-        </div>
-      ) : (
-        <div
-          className="relative h-full w-full overflow-hidden rounded-xl border border-white/70 shadow-sm active:scale-95"
-          style={{ background: photos[0] }}
-        >
-          {/* 顶部渐隐,保证日期清晰 */}
-          <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-black/30 to-transparent" />
-          <span className="absolute left-1 top-0.5 z-10 text-[11px] font-semibold text-white">
-            {day}
-          </span>
-          {extra > 0 && (
-            <span className="absolute bottom-1 right-1 z-10 rounded-md bg-black/45 px-1 text-[10px] font-semibold text-white">
-              +{extra}
-            </span>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// 点开某天:从日历格子位置放大成卡片,关闭缩回原格子;支持下滑关闭。扑克牌叠卡在此展现
-const CARD = { left: 22, top: 78, width: 331, height: 476, radius: 26 };
-
-function DayDetail({ selected, onClose }: { selected: Selected | null; onClose: () => void }) {
-  const data = selected?.data;
-  const origin = selected?.origin;
-  const entries = data ? todayEntries.slice(0, Math.max(1, data.photos.length)) : [];
-  const [spread, setSpread] = useState(false);
-  useEffect(() => {
-    setSpread(false);
-  }, [selected]);
-
-  const onDragEnd = (_: unknown, info: PanInfo) => {
-    if (info.offset.y > 110 || info.velocity.y > 700) onClose();
-  };
-
-  return (
-    <AnimatePresence>
-      {selected && data && origin && (
-        <>
-          <motion.div
-            className="absolute inset-0 z-40 bg-black/45"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-          />
-          {/* morph 容器:从格子 rect 放大 → 卡片;exit 缩回格子 */}
-          <motion.div
-            className="absolute z-50 overflow-hidden bg-canvas shadow-float"
-            initial={{ left: origin.x, top: origin.y, width: origin.w, height: origin.h, borderRadius: 12 }}
-            animate={{
-              left: CARD.left,
-              top: CARD.top,
-              width: CARD.width,
-              height: CARD.height,
-              borderRadius: CARD.radius,
-            }}
-            exit={{ left: origin.x, top: origin.y, width: origin.w, height: origin.h, borderRadius: 12 }}
-            transition={{ type: "spring", stiffness: 360, damping: 34 }}
-            drag="y"
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0.06, bottom: 0.5 }}
-            dragMomentum={false}
-            onDragEnd={onDragEnd}
-          >
-            {/* 内容淡入 */}
-            <motion.div
-              className="flex h-full flex-col px-4 pb-4 pt-3"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.18, delay: 0.06 }}
-            >
-              <div className="mx-auto mb-3 h-1 w-9 shrink-0 rounded-full bg-black/15" />
-              <div className="mb-4 flex shrink-0 items-center justify-between">
-                <div>
-                  <p className="text-[17px] font-bold text-ink-900">6 月 {data.day} 日</p>
-                  <p className="text-[12px] text-ink-400">{entries.length} 项记录</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[20px] font-bold text-ink-900">{data.kcal}</p>
-                  <p className="text-[10px] text-ink-400">kcal</p>
-                </div>
-              </div>
-
-              {/* 照片:默认扑克牌叠卡,点按散开 → 横向滑动逐张翻 */}
-              {spread ? (
-                <div className="no-scrollbar -mx-4 mb-1.5 flex h-40 shrink-0 snap-x snap-mandatory gap-3 overflow-x-auto px-[calc(50%-3.5rem)]">
-                  {data.photos.map((g, idx) => (
-                    <div
-                      key={idx}
-                      onClick={() => setSpread(false)}
-                      className="h-36 w-28 shrink-0 snap-center rounded-2xl border-2 border-white shadow-card"
-                      style={{ background: g }}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div
-                  className="relative mb-1.5 flex h-40 shrink-0 cursor-pointer items-center justify-center"
-                  onClick={() => setSpread(true)}
-                >
-                  {data.photos.slice(0, 4).map((g, idx) => {
-                    const n = Math.min(data.photos.length, 4);
-                    const center = idx - (n - 1) / 2;
-                    return (
-                      <motion.div
-                        key={idx}
-                        className="absolute h-36 w-28 rounded-2xl border-2 border-white shadow-card"
-                        style={{ background: g, zIndex: idx }}
-                        animate={{ x: center * 38, rotate: center * 7, scale: 1 }}
-                        transition={{ type: "spring", stiffness: 320, damping: 26 }}
-                      />
-                    );
-                  })}
-                </div>
-              )}
-              <p className="mb-3 shrink-0 text-center text-[11px] text-ink-400">
-                {data.photos.length > 1
-                  ? spread
-                    ? "左右滑逐张 · 点击收拢"
-                    : "点击散开看每张"
-                  : ""}
-              </p>
-
-              {/* 当天记录列表 */}
-              <div className="no-scrollbar flex-1 overflow-y-auto">
-                <Card className="overflow-hidden">
-                  {entries.map((e, i) => (
-                    <div
-                      key={e.id}
-                      className={`flex items-center gap-3 px-3 py-2.5 ${
-                        i > 0 ? "border-t border-black/5" : ""
-                      }`}
-                    >
-                      <div
-                        className="flex h-10 w-10 items-center justify-center rounded-xl text-[18px]"
-                        style={e.photo ? { background: e.photo } : { background: "#F1F0EB" }}
-                      >
-                        {!e.photo && e.emoji}
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-[14px] font-medium text-ink-900">{e.name}</p>
-                        <p className="text-[11px] text-ink-400">
-                          {e.meal} · {e.time}
-                        </p>
-                      </div>
-                      <span className="text-[13px] font-semibold text-ink-900">{e.kcal}</span>
-                    </div>
-                  ))}
-                </Card>
-              </div>
-            </motion.div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  );
-}
-
-function ListView() {
-  // 按天分组,厚分组头
-  const days = [
-    { date: "今天 · 6 月 5 日", kcal: 1190, entries: todayEntries },
-    { date: "昨天 · 6 月 4 日", kcal: 1640, entries: todayEntries.slice(0, 3) },
-  ];
-  return (
-    <div className="space-y-4">
-      {days.map((d) => (
-        <div key={d.date}>
-          {/* 厚日期分组头 */}
-          <div className="mb-2 flex items-center justify-between rounded-2xl bg-brand-50 px-3.5 py-2.5">
-            <div>
-              <p className="text-[14px] font-bold text-ink-900">{d.date}</p>
-              <p className="text-[11px] text-brand-600">达标 · {d.entries.length} 项记录</p>
-            </div>
-            <div className="text-right">
-              <p className="text-[15px] font-bold text-ink-900">{d.kcal}</p>
-              <p className="text-[10px] text-ink-400">kcal</p>
-            </div>
+    <div>
+      <Card className="px-3 py-3">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <p className="text-[14px] font-bold text-ink-900">当天照片</p>
+            <p className="mt-0.5 text-[11px] text-ink-400">只看照片,编辑仍回到记录列表</p>
           </div>
-          <Card className="overflow-hidden">
-            {d.entries.map((e, i) => (
-              <div
-                key={e.id}
-                className={`flex items-center gap-3 px-3 py-2.5 ${
-                  i > 0 ? "border-t border-black/5" : ""
-                }`}
-              >
-                {/* 统一小缩略图 */}
-                <div
-                  className="flex h-12 w-12 items-center justify-center rounded-xl text-[20px]"
-                  style={e.photo ? { background: e.photo } : { background: "#F1F0EB" }}
-                >
-                  {!e.photo && e.emoji}
-                </div>
-                <div className="flex-1">
-                  <p className="text-[14px] font-medium text-ink-900">{e.name}</p>
-                  <p className="text-[11px] text-ink-400">
-                    {e.meal} · {e.time} · 来源 {e.source}
-                  </p>
-                </div>
-                <span className="text-[13px] font-semibold text-ink-900">{e.kcal}</span>
-              </div>
-            ))}
-          </Card>
+          <button onClick={onBack} className="text-[12px] font-semibold text-brand-600">
+            返回列表
+          </button>
         </div>
-      ))}
+        <div className="grid grid-cols-2 gap-2.5">
+          {entries.map((entry) => (
+            <div key={entry.id} className="overflow-hidden rounded-[16px] bg-canvas">
+              <div className="aspect-[4/3] w-full" style={{ background: entry.photo }} />
+              <div className="px-2.5 py-2">
+                <p className="truncate text-[12px] font-semibold text-ink-900">{entry.name}</p>
+                <p className="mt-0.5 text-[10px] text-ink-400">
+                  {entry.meal} · {entry.kcal} kcal
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
     </div>
   );
+}
+
+function MonthPhotoWall({ offset }: { offset: number }) {
+  const monthCells = monthPhotosForOffset(offset);
+  const days = monthCells.filter((day) => day.day !== null && day.photos.length > 0);
+  return (
+    <div>
+      <Card className="px-3 py-3">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <p className="text-[14px] font-bold text-ink-900">本月照片墙</p>
+            <p className="mt-0.5 text-[11px] text-ink-400">按天看照片,用于回忆和复盘</p>
+          </div>
+          <span className="rounded-pill bg-brand-50 px-2.5 py-1 text-[11px] font-semibold text-brand-700">
+            {days.length} 天
+          </span>
+        </div>
+        <div className="grid grid-cols-7 gap-1.5">
+          {monthCells.map((cell, index) => {
+            if (cell.day === null) return <div key={index} className="aspect-[4/5]" />;
+            const extra = cell.photos.length - 1;
+            return (
+              <div key={index} className="relative aspect-[4/5] overflow-hidden rounded-[9px] bg-black/[0.04]">
+                {cell.photos.length > 0 ? (
+                  <>
+                    <div className="h-full w-full" style={{ background: cell.photos[0] }} />
+                    <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-black/35 to-transparent" />
+                    <span className="absolute left-1 top-0.5 text-[9px] font-bold text-white">{cell.day}</span>
+                    {extra > 0 && (
+                      <span className="absolute bottom-1 right-1 rounded bg-black/45 px-1 text-[9px] font-semibold text-white">
+                        +{extra}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span className="absolute left-1 top-0.5 text-[9px] font-semibold text-ink-300">{cell.day}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+      <p className="mt-3 px-2 text-center text-[11px] leading-relaxed text-ink-400">
+        照片墙只是回看入口;具体餐次、热量和编辑仍回到记录列表。
+      </p>
+    </div>
+  );
+}
+
+function SummaryStat({ label, value, unit }: { label: string; value: string; unit: string }) {
+  return (
+    <div>
+      <p className="text-[10px] text-ink-400">{label}</p>
+      <p className="mt-0.5 text-[15px] font-bold text-ink-900">{value}</p>
+      <p className="text-[10px] text-ink-400">{unit}</p>
+    </div>
+  );
+}
+
+function mealCount(entries: typeof todayEntries) {
+  return new Set(entries.map((entry) => entry.meal)).size;
+}
+
+function entriesForOffset(offset: number) {
+  if (offset === 0) return todayEntries;
+  const count = 2 + (Math.abs(offset) % Math.min(4, todayEntries.length));
+  return todayEntries.slice(0, count).map((entry, index) => ({
+    ...entry,
+    id: `${entry.id}-${offset}`,
+    kcal: Math.max(80, entry.kcal + offset * 17 + index * 9),
+  }));
+}
+
+function dayLabel(offset: number, fallback: string) {
+  if (offset === 0) return fallback;
+  const date = new Date(2026, 5, 5);
+  date.setDate(date.getDate() + offset);
+  return `${date.getMonth() + 1}月${date.getDate()}日记录`;
+}
+
+function monthLabel(offset: number) {
+  let month = 5 + offset;
+  let year = 2026;
+  while (month < 0) {
+    month += 12;
+    year -= 1;
+  }
+  return `${year}年${month + 1}月记录`;
+}
+
+function monthPhotosForOffset(offset: number) {
+  if (offset === 0) return diaryMonth;
+  const shift = Math.abs(offset) % 5;
+  return diaryMonth.map((cell, index) => {
+    if (cell.day === null) return cell;
+    const keep = (index + shift) % 6 !== 0;
+    if (!keep) return { ...cell, photos: [], kcal: 0 };
+    const photos = cell.photos.length > 0 ? cell.photos : diaryMonth[(index + shift + 3) % diaryMonth.length]?.photos ?? [];
+    return {
+      ...cell,
+      photos: photos.slice(0, Math.max(1, Math.min(3, photos.length || 1))),
+      kcal: cell.kcal ? Math.max(700, cell.kcal + offset * 23) : 900 + ((index * 97) % 700),
+    };
+  });
 }
